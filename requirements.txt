@@ -1,7 +1,12 @@
 streamlit
 PyPDF2
+pdf2image
 pytesseract
 pdf2docx
 Pillow
 pdf2image
 python-docx
+
+
+
+

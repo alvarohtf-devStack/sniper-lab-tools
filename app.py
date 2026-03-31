@@ -1,6 +1,5 @@
 import streamlit as st
 from PIL import Image
-from pdf2docx import Converter
 from docx import Document
 import io
 import os
@@ -8,153 +7,191 @@ import pytesseract
 from pdf2image import convert_from_path
 from PyPDF2 import PdfMerger, PdfReader, PdfWriter
 import tempfile
+import zipfile
 
-# --- 1. CONFIGURAÇÃO DE AMBIENTE (Caminhos do seu PC) ---
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-POPPLER_PATH = r'C:\poppler\Library\bin'
+# --- 1. CONFIGURAÇÃO DE AMBIENTE (Híbrido: Windows + Cloud) ---
+def configurar_binarios():
+    tesseract_local = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+    poppler_local = r'C:\poppler\Library\bin'
+    
+    if os.path.exists(tesseract_local):
+        pytesseract.pytesseract.tesseract_cmd = tesseract_local
+        return poppler_local
+    return None 
 
-st.set_page_config(page_title="Sniper Lab | Hub de Ferramentas", page_icon="🎯", layout="wide")
+POPPLER_PATH = configurar_binarios()
 
-# --- 2. INJEÇÃO DE CSS (Sua Identidade Visual) ---
-st.markdown(f"""
+# Configuração da Página
+st.set_page_config(page_title="Sniper Lab | Hub", page_icon="🎯", layout="wide", initial_sidebar_state="collapsed")
+
+# --- 2. LÓGICA DE NAVEGAÇÃO ---
+if 'opcao' not in st.session_state:
+    st.session_state.opcao = "Início"
+
+def navegar(pagina):
+    st.session_state.opcao = pagina
+
+# --- 3. CSS SNIPER ---
+st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;700;800&display=swap');
-    .stApp {{ background-color: #f4f7f6; font-family: 'Segoe UI', sans-serif; }}
-    [data-testid="stSidebar"] {{ background-color: #2c3e50; }}
-    [data-testid="stSidebar"] * {{ color: #ffffff !important; }}
-    h1, h2, h3 {{ color: #2c3e50 !important; font-weight: 800 !important; }}
-    
-    .stButton>button {{
-        background-color: #27ae60 !important;
-        color: white !important;
-        border-radius: 50px !important;
-        padding: 10px 25px !important;
-        font-weight: bold !important;
-        box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3) !important;
-        border: none !important;
-    }}
+    .stApp { background-color: #f4f7f6; font-family: 'Segoe UI', sans-serif; }
+    .header-sniper {
+        background-color: #1e3d1e; 
+        padding: 1.5rem;
+        margin: -5rem -5rem 2rem -5rem;
+        text-align: center;
+        color: white;
+    }
+    .tool-card {
+        background-color: #ffffff;
+        border-radius: 10px;
+        padding: 15px;
+        border-left: 5px solid #27ae60;
+        height: 100px;
+        margin-bottom: 10px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. HEADER (Simulando seu Site) ---
-st.markdown("""
-    <div style="display: flex; justify-content: space-between; align-items: center; background: white; padding: 15px 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 25px;">
-        <div style="font-weight: 800; font-size: 1.5rem; color: #27ae60; letter-spacing: -1px;">SNIPER LAB</div>
-        <div style="font-weight: 500; color: #2d3436;">HUB DE FERRAMENTAS</div>
-    </div>
-    """, unsafe_allow_html=True)
+# --- 4. FUNÇÕES DE SUPORTE ---
+def get_pdf_page_img(pdf_path, page_num):
+    try:
+        # AJUSTE SNIPER: Só passa poppler_path se ele existir (Windows)
+        kwargs = {'poppler_path': POPPLER_PATH} if POPPLER_PATH else {}
+        images = convert_from_path(
+            pdf_path, 
+            first_page=page_num, 
+            last_page=page_num, 
+            size=(None, 400),
+            **kwargs
+        )
+        return images[0]
+    except:
+        return None
 
-# --- 4. FUNÇÕES DE MISSÃO (Lógica Protegida) ---
+# --- 5. ÁREA DE CONTEÚDO ---
+st.markdown("""<div class="header-sniper"><h1>🎯 SNIPER LAB</h1><p>HUB OPERACIONAL 80/20</p></div>""", unsafe_allow_html=True)
 
-def merge_pdfs(lista_pdfs):
-    merger = PdfMerger()
-    for pdf in lista_pdfs:
-        merger.append(pdf)
-    output = io.BytesIO()
-    merger.write(output)
-    merger.close()
-    return output.getvalue()
-
-def split_pdf(pdf_file, pg_inicio, pg_fim):
-    reader = PdfReader(pdf_file)
-    writer = PdfWriter()
+if st.session_state.opcao == "Início":
+    st.markdown("<h2 style='text-align: center;'>Arsenal de Ferramentas</h2>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns(3)
     
-    # Ajuste para índice 0 (usuário digita 1, o código lê 0)
-    for i in range(pg_inicio - 1, pg_fim):
-        writer.add_page(reader.pages[i])
-        
-    output = io.BytesIO()
-    writer.write(output)
-    return output.getvalue()
-
-def ocr_process(pdf_file):
-    with tempfile.TemporaryDirectory() as path:
-        temp_pdf = os.path.join(path, "temp.pdf")
-        with open(temp_pdf, "wb") as f:
-            f.write(pdf_file.getbuffer())
-        try:
-            images = convert_from_path(temp_pdf, poppler_path=POPPLER_PATH)
-            doc = Document()
-            for image in images:
-                texto = pytesseract.image_to_string(image, lang='por')
-                doc.add_paragraph(texto)
-                doc.add_page_break()
-            target = io.BytesIO()
-            doc.save(target)
-            return target.getvalue()
-        except Exception as e:
-            st.error(f"Erro OCR: {e}")
-            return None
-
-# --- 5. MENU LATERAL ---
-with st.sidebar:
-    st.markdown("### 🛠️ Menu Sniper")
-    opcao = st.selectbox("Operação:", ["Início", "Juntar PDFs (Merge)", "Dividir PDF (Split)", "PDF para Word (OCR)", "Imagem para PDF"])
-    st.markdown("---")
-    st.info("Focando nos 20% de esforço que geram 80% de resultado.")
-    st.link_button("🏠 Voltar para o Portal", "https://seu-site-index.com")
-
-# --- 6. ÁREA DE CONTEÚDO ---
-if opcao == "Início":
-    st.markdown("""
-        <div style="background: linear-gradient(135deg, #27ae60, #2c3e50); color: white; padding: 40px; border-radius: 15px; text-align: center;">
-            <h1>Bem-vindo ao Hub de Automação</h1>
-            <p>Transformando documentos complexos em dados prontos para o lucro.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    col1, col2 = st.columns(2)
     with col1:
-        st.markdown('<div style="background: white; padding: 20px; border-radius: 12px; border-left: 5px solid #27ae60; box-shadow: 0 4px 15px rgba(0,0,0,0.05);"><h3>📄 Conversor Inteligente</h3><p>IA para PDFs escaneados com OCR de alta precisão.</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="tool-card"><h3>🔗 Juntar PDFs</h3><p>Mesclar múltiplos arquivos.</p></div>', unsafe_allow_html=True)
+        if st.button("Abrir Unificador", key="btn_merge"): navegar("Juntar PDFs (Merge)")
+        st.markdown('<div class="tool-card"><h3>📄 PDF para Word</h3><p>OCR de Alta Precisão.</p></div>', unsafe_allow_html=True)
+        if st.button("Abrir OCR", key="btn_ocr"): navegar("PDF para Word (OCR)")
+    
     with col2:
-        st.markdown('<div style="background: white; padding: 20px; border-radius: 12px; border-left: 5px solid #2c3e50; box-shadow: 0 4px 15px rgba(0,0,0,0.05);"><h3>🔗 Unificador Sniper</h3><p>Junte múltiplos relatórios em um único arquivo PDF.</p></div>', unsafe_allow_html=True)
-
-elif opcao == "Juntar PDFs (Merge)":
-    st.header("🔗 Juntar vários PDFs")
-    arquivos = st.file_uploader("Selecione os arquivos", type="pdf", accept_multiple_files=True)
-    if arquivos and st.button("Iniciar Fusão"):
-        pdf_final = merge_pdfs(arquivos)
-        st.download_button("📥 Baixar PDF Unificado", pdf_final, "unificado_sniper.pdf")
-
-elif opcao == "Dividir PDF (Split)":
-    st.header("✂️ Dividir PDF por Intervalo")
-    arquivo_split = st.file_uploader("Suba o PDF que deseja cortar", type="pdf")
-    if arquivo_split:
-        reader_temp = PdfReader(arquivo_split)
-        total_pags = len(reader_temp.pages)
-        st.write(f"O documento possui **{total_pags}** páginas.")
+        st.markdown('<div class="tool-card"><h3>✂️ Dividir PDF</h3><p>Múltiplos intervalos + Preview.</p></div>', unsafe_allow_html=True)
+        if st.button("Abrir Divisor", key="btn_split"): navegar("Dividir PDF (Split)")
+        st.markdown('<div class="tool-card"><h3>📸 Imagem para PDF</h3><p>Conversor de Imagens.</p></div>', unsafe_allow_html=True)
+        if st.button("Abrir Conversor", key="btn_img"): navegar("Imagem para PDF")
         
-        c1, c2 = st.columns(2)
-        with c1:
-            inicio = st.number_input("Página Inicial", min_value=1, max_value=total_pags, value=1)
-        with c2:
-            fim = st.number_input("Página Final", min_value=1, max_value=total_pags, value=total_pags)
+    with col3:
+        st.markdown('<div class="tool-card" style="opacity:0.5"><h3>⚙️ Automação</h3><p>Em breve: Make/Zapier.</p></div>', unsafe_allow_html=True)
+        st.button("Bloqueado", disabled=True, key="lock1")
+
+else:
+    if st.button("⬅ Voltar ao Arsenal"): navegar("Início")
+
+    if st.session_state.opcao == "Dividir PDF (Split)":
+        st.header("✂️ Divisor Sniper")
+        arquivo = st.file_uploader("Suba o PDF", type="pdf")
+        
+        if arquivo:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as t_file:
+                t_file.write(arquivo.getvalue())
+                path_pdf = t_file.name
             
-        if st.button("Cortar PDF"):
-            if inicio <= fim:
-                pdf_cortado = split_pdf(arquivo_split, inicio, fim)
-                st.download_button("📥 Baixar PDF Cortado", pdf_cortado, "cortado_sniper.pdf")
-            else:
-                st.error("A página inicial não pode ser maior que a final.")
+            reader = PdfReader(path_pdf)
+            total = len(reader.pages)
+            st.info(f"O documento possui {total} páginas.")
+            
+            intervalos_str = st.text_input("Intervalos (ex: 1-2, 5)", placeholder="Ex: 1-3, 10")
+            
+            if intervalos_str:
+                try:
+                    partes = intervalos_str.replace(" ", "").split(",")
+                    for idx, parte in enumerate(partes):
+                        st.subheader(f"🔍 Preview Intervalo {idx+1}")
+                        c1, c2 = st.columns(2)
+                        
+                        inicio, fim = (map(int, parte.split("-"))) if "-" in parte else (int(parte), int(parte))
+                        
+                        with c1:
+                            img_i = get_pdf_page_img(path_pdf, inicio)
+                            if img_i: st.image(img_i, caption=f"Pág. {inicio}", width='stretch')
+                        with c2:
+                            img_f = get_pdf_page_img(path_pdf, fim)
+                            if img_f: st.image(img_f, caption=f"Pág. {fim}", width='stretch')
+                    
+                    st.divider()
+                    if st.button("🚀 Gerar Arquivos"):
+                        ficheiros = []
+                        for idx, p in enumerate(partes):
+                            writer = PdfWriter()
+                            ini, f = (map(int, p.split("-"))) if "-" in p else (int(p), int(p))
+                            for i in range(max(1, ini)-1, min(total, f)):
+                                writer.add_page(reader.pages[i])
+                            buf = io.BytesIO()
+                            writer.write(buf)
+                            ficheiros.append((f"parte_{idx+1}.pdf", buf.getvalue()))
 
-elif opcao == "PDF para Word (OCR)":
-    st.header("📄 Conversor OCR Robusto")
-    upload_pdf = st.file_uploader("Suba seu PDF técnico", type=["pdf"])
-    if upload_pdf and st.button("Iniciar Operação"):
-        with st.spinner("IA Sniper Analisando..."):
-            docx_data = ocr_process(upload_pdf)
-            if docx_data:
-                st.download_button("📥 Baixar Documento Final", docx_data, "resultado_sniper.docx")
+                        ca, cb = st.columns(2)
+                        with ca:
+                            merger = PdfMerger()
+                            for _, c in ficheiros: merger.append(io.BytesIO(c))
+                            b_u = io.BytesIO()
+                            merger.write(b_u)
+                            st.download_button("📥 PDF Único", b_u.getvalue(), "unido.pdf", width='stretch')
+                        with cb:
+                            b_z = io.BytesIO()
+                            with zipfile.ZipFile(b_z, "w") as zf:
+                                for n, c in ficheiros: zf.writestr(n, c)
+                            st.download_button("📦 Arquivo ZIP", b_z.getvalue(), "partes.zip", width='stretch')
+                except:
+                    st.warning("Aguardando formato válido...")
+            os.unlink(path_pdf)
 
-elif opcao == "Imagem para PDF":
-    st.header("📸 Imagem para PDF")
-    upload = st.file_uploader("Suba sua imagem", type=["png", "jpg", "jpeg"])
-    if upload and st.button("Converter"):
-        img = Image.open(upload).convert('RGB')
-        buf = io.BytesIO()
-        img.save(buf, format="PDF")
-        st.download_button("📥 Baixar PDF", buf.getvalue(), "imagem_convertida.pdf")
+    elif st.session_state.opcao == "Juntar PDFs (Merge)":
+        st.header("🔗 Unificador")
+        arquivos = st.file_uploader("Selecione os PDFs", type="pdf", accept_multiple_files=True)
+        if arquivos and st.button("Fundir"):
+            merger = PdfMerger()
+            for f in arquivos: merger.append(f)
+            out = io.BytesIO()
+            merger.write(out)
+            st.download_button("📥 Baixar", out.getvalue(), "unido.pdf", width='stretch')
 
-# --- 7. FOOTER ---
+    elif st.session_state.opcao == "PDF para Word (OCR)":
+        st.header("📄 OCR Sniper")
+        up = st.file_uploader("PDF Escaneado", type="pdf")
+        if up and st.button("Processar OCR"):
+            with st.spinner("Analisando..."):
+                with tempfile.TemporaryDirectory() as tmp:
+                    p = os.path.join(tmp, "t.pdf")
+                    with open(p, "wb") as f: f.write(up.getbuffer())
+                    # AJUSTE SNIPER AQUI TAMBÉM
+                    kwargs = {'poppler_path': POPPLER_PATH} if POPPLER_PATH else {}
+                    imgs = convert_from_path(p, **kwargs)
+                    doc = Document()
+                    for i in imgs:
+                        doc.add_paragraph(pytesseract.image_to_string(i, lang='por'))
+                        doc.add_page_break()
+                    b = io.BytesIO()
+                    doc.save(b)
+                    st.download_button("📥 Baixar Word", b.getvalue(), "ocr.docx", width='stretch')
+
+    elif st.session_state.opcao == "Imagem para PDF":
+        st.header("📸 Imagem -> PDF")
+        img_up = st.file_uploader("Imagem", type=["png", "jpg"])
+        if img_up and st.button("Converter"):
+            im = Image.open(img_up).convert('RGB')
+            buf = io.BytesIO()
+            im.save(buf, format="PDF")
+            st.download_button("📥 Baixar PDF", buf.getvalue(), "foto.pdf", width='stretch')
+
 st.markdown("---")
-st.markdown('<div style="text-align: center; color: #95a5a6; font-size: 0.8rem;">© 2026 - Sniper Lab | Operando sob o Princípio de Pareto</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align: center; color: #95a5a6; font-size: 0.8rem;">© 2026 - Sniper Lab</div>', unsafe_allow_html=True)
