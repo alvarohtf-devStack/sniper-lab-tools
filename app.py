@@ -8,6 +8,7 @@ from pdf2image import convert_from_path
 from PyPDF2 import PdfMerger, PdfReader, PdfWriter
 import tempfile
 import zipfile
+import streamlit.components.v1 as components # Import necessário para a Tag
 
 # --- 1. CONFIGURAÇÃO DE AMBIENTE ---
 def configurar_binarios():
@@ -23,14 +24,29 @@ POPPLER_PATH = configurar_binarios()
 # Configuração da Página
 st.set_page_config(page_title="Sniper Lab | Hub", page_icon="🎯", layout="wide", initial_sidebar_state="collapsed")
 
-# --- 2. LÓGICA DE NAVEGAÇÃO (Ajustada para 1 clique) ---
+# --- INJEÇÃO DA GOOGLE TAG (ANALYTICS) ---
+# Isso injeta o script no cabeçalho invisível do app
+components.html(
+    """
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-NGBVHMR43R"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-NGBVHMR43R');
+    </script>
+    """,
+    height=0, # Deixamos altura 0 para não criar espaço em branco na tela
+)
+
+# --- 2. LÓGICA DE NAVEGAÇÃO ---
 if 'opcao' not in st.session_state:
     st.session_state.opcao = "Início"
 
 def navegar(pagina):
     st.session_state.opcao = pagina
 
-# --- 3. CSS SNIPER V2 (Estilo Dark/Moderno e Mobile-First) ---
+# --- 3. CSS SNIPER V2 ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap');
@@ -47,7 +63,6 @@ st.markdown("""
         box-shadow: 0 4px 15px rgba(0,0,0,0.3);
     }
     
-    /* Grid de Cards */
     .tool-card {
         background-color: white;
         border-radius: 12px;
@@ -62,11 +77,9 @@ st.markdown("""
         justify-content: space-between;
     }
     
-    /* Texto dos Cards (Garante visibilidade no Mobile) */
     .tool-card h3 { color: #1e3d1e !important; margin-bottom: 5px; font-weight: 800; }
     .tool-card p { color: #576574 !important; font-size: 0.9rem; line-height: 1.3; }
     
-    /* Botões customizados para parecerem parte do card */
     div.stButton > button {
         width: 100%;
         background-color: #1e3d1e;
@@ -83,7 +96,6 @@ st.markdown("""
         transform: translateY(-2px);
     }
 
-    /* Ajuste para Mobile */
     @media (max-width: 768px) {
         .header-sniper { margin: -6rem -1rem 1rem -1rem; padding: 2rem 1rem; }
     }
